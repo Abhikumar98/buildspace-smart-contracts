@@ -19,6 +19,9 @@ contract Web3GiftsNFT is Ownable, ERC721, ERC721Enumerable, ERC721URIStorage {
         address from;
         uint256 redeem_at;
     }
+    
+    event GiftMintedToOwner(address indexed previousOwner,address indexed newOwner);
+    event GiftRedeemed(address indexed owner,uint256 indexed tokenID);
 
     mapping(uint256 => Gift) private gifts;
     mapping(address => uint256[]) private ownerGifts;
@@ -57,6 +60,8 @@ contract Web3GiftsNFT is Ownable, ERC721, ERC721Enumerable, ERC721URIStorage {
 
         transferToken(msg.sender, ownerAddress, newID);
 
+        emit GiftMintedToOwner(msg.sender, ownerAddress);
+
         return newID;
     }
 
@@ -84,6 +89,8 @@ contract Web3GiftsNFT is Ownable, ERC721, ERC721Enumerable, ERC721URIStorage {
 
         payable(msg.sender).transfer(gift.amount);
         gifts[tokenID].redeemed = true;
+
+        emit GiftRedeemed(msg.sender, tokenID);
 
         return gift.amount;
     }
