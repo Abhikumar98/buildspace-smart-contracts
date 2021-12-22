@@ -1,19 +1,14 @@
 const main = async () => {
-    const contractFactory = await hre.ethers.getContractFactory("MyEpicNFT");
-    const contract = await contractFactory.deploy()
-    await contract.deployed()
-    console.log('Contract deployed to --> ', contract.address)
+    const [deployer] = await ethers.getSigners();
 
-    // below code would mint nft
+    console.log("Deploying contracts with the account:", deployer.address);
 
-    // let txn = await contract.makeAnEpicNFT()
-    // // Wait for it to be mined.
-    // await txn.wait()
+    console.log("Account balance:", (await deployer.getBalance()).toString());
 
-    // // Mint another NFT for fun.
-    // txn = await contract.makeAnEpicNFT()
-    // // Wait for it to be mined.
-    // await txn.wait()
+    const Web3Gifts = await ethers.getContractFactory("Web3GiftsNFT");
+    const web3gifts = await Web3Gifts.deploy("Web3Gifts", "W3G", "ipfs://QmXqUMkNLRdpjHfwoAomzXPz9HfTLMZVsnjsX9HwbHJaBe");
+
+    console.log("Contract address:", web3gifts.address);
 }
 
 const run = async () => {

@@ -1,83 +1,126 @@
-pragma solidity 0.8.0;
+pragma solidity ^0.8.0;
 
-// We need some util functions for strings.
-import "@openzeppelin/contracts/utils/Strings.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "hardhat/console.sol";
-import { Base64 } from "./libraries/Base64.sol";
 
+contract Web3GiftsNFT is ERC721, ERC721Enumerable, ERC721URIStorage {
+    string public contract_metadata;
+    using Counters for Counters.Counter;
+    Counters.Counter public _tokenIDs;
 
-contract MyEpicNFT is ERC721URIStorage {
-  using Counters for Counters.Counter;
-  Counters.Counter private _tokenIds;
+    struct Gift {
+        uint256 tokenID;
+        uint256 amount;
+        bool redeemed;
+    }
 
-  // This is our SVG code. All we need to change is the word that's displayed. Everything else stays the same.
-  // So, we make a baseSvg variable here that all our NFTs can use.
-  string baseSvg = "<svg xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='xMinYMin meet' viewBox='0 0 350 350'><style>.base { fill: white; font-family: serif; font-size: 24px; }</style><rect width='100%' height='100%' fill='black' /><text x='50%' y='50%' class='base' dominant-baseline='middle' text-anchor='middle'>";
+    mapping(uint256 => Gift) private gifts;
+    mapping(address => uint256[]) private ownerGifts;
 
-  // I create three arrays, each with their own theme of random words.
-  // Pick some random funny words, names of anime characters, foods you like, whatever! 
-  string[] firstWords = ["India", "Australia", "US", "UK", "Europe", "Egypt", "France", "Antarctica"];
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        string memory _metadata
+    ) ERC721(_name, _symbol) {
+        contract_metadata = _metadata;
+    }
 
-  constructor() ERC721 ("TestFT", "Testing") {
-    console.log("This is my NFT contract. Woah!");
-  }
+    function contractURI() public view returns (string memory) {
+        return contract_metadata;
+    }
 
-  // I create a function to randomly pick a word from each array.
-  function pickRandomFirstWord(uint256 tokenId) public view returns (string memory) {
-    // I seed the random generator. More on this in the lesson. 
-    uint256 rand = random(string(abi.encodePacked("FIRST_WORD", Strings.toString(tokenId))));
-    // Squash the # between 0 and the length of the array to avoid going out of bounds.
-    rand = rand % firstWords.length;
-    return firstWords[rand];
-  }
+    function mint(string memory uri, address ownerAddress) public payable returns (uint256) {
+        require(msg.value > 0, "Gift cannot be worth 0 ETH");
 
-  function random(string memory input) internal pure returns (uint256) {
-      return uint256(keccak256(abi.encodePacked(input)));
-  }
+        _tokenIDs.increment();
+        uint256 newID = _tokenIDs.current();
 
-  function makeAnEpicNFT() public {
-    uint256 newItemId = _tokenIds.current();
+        Gift memory newGift = Gift({
+            tokenID: newID,
+            amount: msg.value,
+            redeemed: false
+        });
 
-    // We go and randomly grab one word from each of the three arrays.
-    string memory place = string(abi.encodePacked(pickRandomFirstWord(newItemId)));
+        gifts[newID] = newGift;
+        ownerGifts[ownerAddress].push(newID);
 
-    // I concatenate it all together, and then close the <text> and <svg> tags.
-    string memory finalSvg = string(abi.encodePacked(baseSvg, 'What happens in ',place, ' stays in ', place, "</text></svg>"));
-    console.log("\n--------------------");
-    console.log(finalSvg);
-    console.log("--------------------\n");
+        _safeMint(msg.sender, newID);
+        _setTokenURI(newID, uri);
 
-    string memory json = Base64.encode(
-        bytes(
-            string(
-                abi.encodePacked(
-                    '{"name": "',
-                    // We set the title of our NFT as the generated word.
-                    place,
-                    '", "description": "A highly acclaimed collection of squares in ',place,'", "image": "data:image/svg+xml;base64,',
-                    // We add data:image/svg+xml;base64 and then append our base64 encode our svg.
-                    Base64.encode(bytes(finalSvg)),
-                    '"}'
-                )
-            )
-        )
-    );
+        transferToken(msg.sender, ownerAddress, newID);
 
-    _safeMint(msg.sender, newItemId);
+        return newID;
+    }
 
-    console.log(newItemId);
+    function getAllGifts(address owner) public view returns (Gift[] memory) {
 
-    string memory base64Json = string(
-        abi.encodePacked("data:application/json;base64,", json)
-    );
-  
-    // We'll be setting the tokenURI later!
-    _setTokenURI(newItemId, base64Json);
-    console.log(base64Json);
-  
-    _tokenIds.increment();
-    console.log("An NFT w/ ID %s has been minted to %s", newItemId, msg.sender);
-  }
+        Gift[] memory result = new Gift[](ownerGifts[owner].length);
+
+        for (uint256 i = 0; i < ownerGifts[owner].length; i++) {
+            result[i] = gifts[ownerGifts[owner][i]];
+        }
+
+        return result;
+    }
+
+    function redeem(uint256 tokenID) public returns (uint256) {
+        Gift memory gift = gifts[tokenID];
+        require(gift.redeemed == false, "Gift has already been redeemed");
+
+        address tokenOwner = ownerOf(tokenID);
+        require(tokenOwner == msg.sender, "You do not own this gift");
+
+        payable(msg.sender).transfer(gift.amount);
+        gifts[tokenID].redeemed = true;
+
+        return gift.amount;
+    }
+
+    function transferToken(
+        address from,
+        address to,
+        uint256 tokenID
+    ) public returns (bool) {
+        super.safeTransferFrom(from, to, tokenID);
+        return true;
+    }
+
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal override(ERC721, ERC721Enumerable) {
+        super._beforeTokenTransfer(from, to, tokenId);
+    }
+
+    function _burn(uint256 tokenId)
+        internal
+        override(ERC721, ERC721URIStorage)
+    {
+        super._burn(tokenId);
+    }
+
+    function tokenURI(uint256 tokenId)
+        public
+        view
+        override(ERC721, ERC721URIStorage)
+        returns (string memory)
+    {
+        return super.tokenURI(tokenId);
+    }
+
+    function ownerOf(uint256 tokenId) public view override returns (address) {
+        return super.ownerOf(tokenId);
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC721, ERC721Enumerable)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
+    }
 }
