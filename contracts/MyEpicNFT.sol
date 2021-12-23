@@ -26,6 +26,8 @@ contract Web3GiftsNFT is Ownable, ERC721, ERC721Enumerable, ERC721URIStorage {
     mapping(uint256 => Gift) private gifts;
     mapping(address => uint256[]) private ownerGifts;
 
+    uint giftCharge = 0.01 ether;
+
     constructor(
         string memory _name,
         string memory _symbol,
@@ -38,15 +40,20 @@ contract Web3GiftsNFT is Ownable, ERC721, ERC721Enumerable, ERC721URIStorage {
         return contract_metadata;
     }
 
-    function mint(string memory uri, address ownerAddress, uint256 redeem_at) public payable returns (uint256) {
-        require(msg.value > 0, "Gift cannot be worth 0 ETH");
+    function mint(string memory uri, address ownerAddress, uint256 redeem_at, string memory message) public payable returns (uint256) {
+        require(msg.value > giftCharge, "Gift cannot be lesser than 0.01 ETH");
+
+        // check if message length is greater than 140 chars
+        require(bytes(message).length <= 140, "Message cannot be greater than 140 characters");
 
         _tokenIDs.increment();
         uint256 newID = _tokenIDs.current();
 
+        uint256 amount = msg.value - giftCharge;
+
         Gift memory newGift = Gift({
             tokenID: newID,
-            amount: msg.value,
+            amount: amount,
             redeemed: false,
             redeem_at: redeem_at,
             from: msg.sender
